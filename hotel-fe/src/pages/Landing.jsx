@@ -19,6 +19,20 @@ const HOTEL_BANK_CONFIG = {
 const DEFAULT_CCCD_FRONT = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80';
 const DEFAULT_CCCD_BACK = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80';
 
+function readCurrentUser() {
+  const savedUser = localStorage.getItem(STORAGE_KEYS.USER)
+    || sessionStorage.getItem(STORAGE_KEYS.USER);
+  if (!savedUser) return null;
+
+  try {
+    return JSON.parse(savedUser);
+  } catch {
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    sessionStorage.removeItem(STORAGE_KEYS.USER);
+    return null;
+  }
+}
+
 const INITIAL_ROOMS = [
   { id: '101', name: 'Deluxe King Elegance', type: 'Standard', price: 750000, status: 'Trống', image: 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=700&q=80', beds: '1 Giường King lớn', view: 'Hướng hoa viên nội khu', size: '38m²', maxGuests: 2, currentGuest: null },
   { id: '102', name: 'Superior Twin Balcony', type: 'Superior', price: 1100000, status: 'Đang thuê', image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=700&q=80', beds: '2 Giường Twin êm ái', view: 'Ban công hướng biển', size: '45m²', maxGuests: 2, currentGuest: 'Trần Hải Đăng' },
@@ -48,8 +62,7 @@ export default function Landing() {
 
   // Current logged in user state
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.USER);
-    return saved ? JSON.parse(saved) : null;
+    return readCurrentUser();
   });
 
   // Filter state
@@ -132,9 +145,8 @@ export default function Landing() {
 
   // Sync user state with localStorage
   useEffect(() => {
-    const savedUser = localStorage.getItem(STORAGE_KEYS.USER);
-    if (savedUser) {
-      const u = JSON.parse(savedUser);
+    const u = readCurrentUser();
+    if (u) {
       setCurrentUser(u);
       setProfileForm({
         name: u.name || '',
@@ -160,6 +172,7 @@ export default function Landing() {
   // Handle Logout
   const handleLogout = () => {
     localStorage.removeItem(STORAGE_KEYS.USER);
+    sessionStorage.removeItem(STORAGE_KEYS.USER);
     setCurrentUser(null);
     showToast('Đã đăng xuất', 'Quý khách đã đăng xuất an toàn khỏi hệ thống.', 'info');
   };
@@ -419,7 +432,7 @@ export default function Landing() {
                 onClick={handleLogout}
                 title="Đăng xuất"
               >
-                <i className="fa-solid fa-arrow-right-from-bracket"></i>
+                <i className="fa-solid fa-arrow-right-from-bracket"></i> Đăng xuất
               </button>
             </>
           ) : currentUser ? (
@@ -445,27 +458,21 @@ export default function Landing() {
               >
                 <i className="fa-solid fa-list-check"></i> Đơn của tôi
               </button>
-              <Link to="/admin" className="landing-btn btn-sm btn-gold" title="Khu vực quản trị">
-                <i className="fa-solid fa-shield-halved"></i> Quản Trị
-              </Link>
               <button 
                 className="landing-btn btn-sm btn-dark" 
                 onClick={handleLogout}
                 title="Đăng xuất"
               >
-                <i className="fa-solid fa-arrow-right-from-bracket"></i>
+                <i className="fa-solid fa-arrow-right-from-bracket"></i> Đăng xuất
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" className="landing-btn btn-outline-gold btn-sm">
+              <Link to="/login" className="landing-btn btn-gold btn-sm">
                 <i className="fa-solid fa-user"></i> Đăng Nhập
               </Link>
               <Link to="/register" className="landing-btn btn-outline-gold btn-sm">
                 <i className="fa-solid fa-id-card"></i> Đăng Ký CCCD
-              </Link>
-              <Link to="/admin" className="landing-btn btn-gold btn-sm" title="Vào khu vực quản trị">
-                <i className="fa-solid fa-shield-halved"></i> Quản Trị
               </Link>
             </>
           )}
@@ -700,6 +707,7 @@ export default function Landing() {
               <li><a href="#rooms">Bộ sưu tập phòng</a></li>
               <li><a href="#amenities">Tiện ích đặc quyền</a></li>
               <li><Link to="/login">Đăng nhập tài khoản</Link></li>
+              <li><Link to="/login?redirect=/admin" style={{ opacity: 0.75 }}><i className="fa-solid fa-lock" style={{ color: 'var(--gold-primary)', marginRight: '6px' }}></i> Cổng Nội Bộ Nhân Sự</Link></li>
             </ul>
           </div>
           <div className="footer-col">

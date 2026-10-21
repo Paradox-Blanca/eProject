@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const TABS = ['Thông tin cá nhân', 'Giấy tờ', 'Lịch sử lưu trú', 'Ghi chú', 'Khai báo lưu trú'];
 const HISTORY = [
@@ -22,13 +22,19 @@ function Upload({ label }) {
 }
 
 export default function Profile() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [foreign, setForeign] = useState(false);
+  const handleLogout = () => {
+    localStorage.removeItem('grand_hotel_current_user_v2');
+    sessionStorage.removeItem('grand_hotel_current_user_v2');
+    navigate('/login');
+  };
   return (
     <>
       <header className="top">
-        <b>Hotel Manager</b>
-        <span>Quản trị viên <span className="badge">Admin</span> <Link to="/login">Đăng xuất</Link></span>
+        <b>Grand Hotel</b>
+        <span><button type="button" className="link" style={{ color: '#fff' }} onClick={handleLogout}>Đăng xuất</button></span>
       </header>
       <div className="page">
         <h1>Hồ sơ khách</h1>

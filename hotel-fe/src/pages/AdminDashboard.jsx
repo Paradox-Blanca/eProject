@@ -13,6 +13,20 @@ const STORAGE_KEYS = {
   HISTORICAL_REVENUE: 'grand_hotel_historical_revenue_v3'
 };
 
+function readCurrentUser() {
+  const savedUser = localStorage.getItem(STORAGE_KEYS.USER)
+    || sessionStorage.getItem(STORAGE_KEYS.USER);
+  if (!savedUser) return null;
+
+  try {
+    return JSON.parse(savedUser);
+  } catch {
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    sessionStorage.removeItem(STORAGE_KEYS.USER);
+    return null;
+  }
+}
+
 const HOTEL_BANK_CONFIG = {
   bankId: 'MB',
   accountNo: '098888899',
@@ -191,6 +205,7 @@ function generateVietQRUrl(amount, content) {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const [currentUser] = useState(readCurrentUser);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -211,9 +226,6 @@ export default function AdminDashboard() {
   const [rolesConfig, setRolesConfig] = useState(() => {
     const d = localStorage.getItem(STORAGE_KEYS.ROLES_CONFIG);
     return d ? JSON.parse(d) : INITIAL_ROLES;
-  });
-  const [activeStaffId, setActiveStaffId] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.ACTIVE_STAFF_ID) || 'NV-001';
   });
   const [transactions, setTransactions] = useState(() => {
     const d = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
@@ -271,8 +283,15 @@ export default function AdminDashboard() {
   const trendChartInstance = useRef(null);
   const donutChartInstance = useRef(null);
 
-  // Active Staff & Current Role Permissions
-  const activeStaff = staffUsers.find(s => s.id === activeStaffId) || staffUsers[0];
+  // Permissions are derived from the authenticated session, never a role picker.
+  const activeStaff = staffUsers.find(s => s.id === currentUser?.id)
+    || (currentUser ? {
+      id: currentUser.id,
+      name: currentUser.name,
+      email: currentUser.email,
+      roleId: currentUser.roleId,
+      status: 'active'
+    } : null);
   const activeRole = rolesConfig.find(r => r.id === activeStaff?.roleId) || rolesConfig[0];
 
   const hasPermission = (permKey) => {
@@ -293,26 +312,17 @@ export default function AdminDashboard() {
     localStorage.setItem(STORAGE_KEYS.ROLES_CONFIG, JSON.stringify(rolesConfig));
   }, [rolesConfig]);
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_STAFF_ID, activeStaffId);
-  }, [activeStaffId]);
-  useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
   }, [transactions]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.HISTORICAL_REVENUE, JSON.stringify(historicalRevenue));
   }, [historicalRevenue]);
 
-  // Handle Switch Role
-  const handleSwitchStaff = (id) => {
-    setActiveStaffId(id);
-    const s = staffUsers.find(x => x.id === id);
-    const r = rolesConfig.find(x => x.id === s?.roleId);
-    showToast('Chuyển vai trò thành công', `Đang thao tác: ${s?.name} (${r?.name})`, 'info');
-  };
-
   // Handle Logout
   const handleLogout = () => {
     localStorage.removeItem(STORAGE_KEYS.USER);
+    sessionStorage.removeItem(STORAGE_KEYS.USER);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_STAFF_ID);
     showToast('Đã đăng xuất', 'Đã thoát phiên quản trị viên.', 'info');
     navigate('/login');
   };
@@ -746,9 +756,11 @@ export default function AdminDashboard() {
             <button className="landing-btn btn-outline-gold" style={{ width: '100%', fontSize: '0.85rem' }} onClick={() => navigate('/')}>
               <i className="fa-solid fa-arrow-left"></i> Xem Trang Khách
             </button>
-            <button className="landing-btn btn-dark" style={{ width: '100%', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.15)' }} onClick={handleResetDemoData}>
-              <i className="fa-solid fa-rotate"></i> Reset Dữ Liệu Gốc
-            </button>
+            {hasPermission('system_reset') && (
+              <button className="landing-btn btn-dark" style={{ width: '100%', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.15)' }} onClick={handleResetDemoData}>
+                <i className="fa-solid fa-rotate"></i> Reset Dữ Liệu Gốc
+              </button>
+            )}
           </div>
         </aside>
 
@@ -765,15 +777,11 @@ export default function AdminDashboard() {
             </h2>
 
             <div className="topbar-actions">
-              <div className="quick-role-switcher" title="Chuyển nhanh tài khoản để kiểm tra phân quyền thực tế">
+              <div className="quick-role-switcher" title="Chức vụ được xác định từ phiên đăng nhập">
                 <i className="fa-solid fa-user-shield" style={{ color: 'var(--gold-dark)' }}></i>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Vai trò:</span>
-                <select value={activeStaffId} onChange={e => handleSwitchStaff(e.target.value)}>
-                  {staffUsers.map(s => {
-                    const r = rolesConfig.find(role => role.id === s.roleId);
-                    return <option key={s.id} value={s.id}>{s.name} ({r?.name || s.roleId})</option>;
-                  })}
-                </select>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {activeStaff?.name || 'Nhân sự'} · {activeRole?.name || 'Nhân sự nội bộ'}
+                </span>
               </div>
 
               <button className="landing-btn btn-sm btn-dark" onClick={handleLogout} title="Đăng xuất">
