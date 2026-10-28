@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { logout as revokeSession } from '../services/authApi';
 
 const TABS = ['Thông tin cá nhân', 'Giấy tờ', 'Lịch sử lưu trú', 'Ghi chú', 'Khai báo lưu trú'];
 const HISTORY = [
@@ -25,7 +26,12 @@ export default function Profile() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [foreign, setForeign] = useState(false);
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await revokeSession();
+    } catch {
+      // Clear the browser session even when the API is offline.
+    }
     localStorage.removeItem('grand_hotel_current_user_v2');
     sessionStorage.removeItem('grand_hotel_current_user_v2');
     navigate('/login');

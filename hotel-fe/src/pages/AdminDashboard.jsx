@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { logout as revokeSession } from '../services/authApi';
 import './AdminDashboard.css';
 
 const STORAGE_KEYS = {
@@ -319,7 +320,12 @@ export default function AdminDashboard() {
   }, [historicalRevenue]);
 
   // Handle Logout
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await revokeSession();
+    } catch {
+      // The local session must still be cleared if the API cannot be reached.
+    }
     localStorage.removeItem(STORAGE_KEYS.USER);
     sessionStorage.removeItem(STORAGE_KEYS.USER);
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_STAFF_ID);

@@ -2,7 +2,7 @@
 ## Dự án: Grand Hotel & Resorts Management System (eProject)
 **File:** `login.md`  
 **Ngày cập nhật:** 21/10/2026  
-**Trạng thái:** Đã hoàn thiện Frontend & Thiết kế chuẩn Backend Java Spring Boot 3
+**Trạng thái:** Frontend đã tích hợp API; backend Spring Boot 3 đã triển khai tại `hotel-be/`. Luồng OTP cần kết nối nhà cung cấp Email/SMS khi triển khai production.
 
 ---
 

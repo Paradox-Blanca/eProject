@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { logout as revokeSession } from '../services/authApi';
 import './Landing.css';
 
 const STORAGE_KEYS = {
@@ -170,7 +171,12 @@ export default function Landing() {
   }, [rooms]);
 
   // Handle Logout
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await revokeSession();
+    } catch {
+      // Local cleanup still protects the browser UI if the API is unavailable.
+    }
     localStorage.removeItem(STORAGE_KEYS.USER);
     sessionStorage.removeItem(STORAGE_KEYS.USER);
     setCurrentUser(null);

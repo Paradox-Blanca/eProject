@@ -1,21 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { login } from '../services/authApi';
 import './Login.css';
 
 const STORAGE_KEYS = {
   USER: 'grand_hotel_current_user_v2',
   ACTIVE_STAFF_ID: 'grand_hotel_active_staff_id_v2',
-  STAFF_USERS: 'grand_hotel_staff_users_v2',
 };
 
 function isSafeInternalPath(path) {
   return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//');
 }
 
-const DEFAULT_CCCD_FRONT = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80';
-const DEFAULT_CCCD_BACK = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80';
-
-// Danh sách nhân sự mặc định đối chiếu
+// Only for the tester helper. Authentication itself always happens on the API.
 const SYSTEM_STAFF_ACCOUNTS = [
   { id: 'NV-001', username: 'admin', name: 'Hoàng Minh Quân', email: 'quan.hoang@grandhotel.vn', phone: '0903111222', roleId: 'admin', roleTitle: 'Tổng Quản Lý / Admin' },
   { id: 'NV-002', username: 'manager', name: 'Nguyễn Thu Thảo', email: 'thao.nguyen@grandhotel.vn', phone: '0918333444', roleId: 'manager', roleTitle: 'Quản Lý Lễ Tân' },
@@ -59,7 +56,7 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [lockoutTimer]);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (lockoutTimer > 0) return;
 
@@ -74,108 +71,109 @@ export default function Login() {
 
     setLoading(true);
 
-    // Mô phỏng độ trễ xác thực mạng và băm bảo mật
-    setTimeout(() => {
-      // 1. Kiểm tra trong danh sách nhân viên
-      const savedStaff = localStorage.getItem(STORAGE_KEYS.STAFF_USERS);
-      let staffList = SYSTEM_STAFF_ACCOUNTS;
-      if (savedStaff) {
-        try {
-          staffList = JSON.parse(savedStaff);
-        } catch {
-          localStorage.removeItem(STORAGE_KEYS.STAFF_USERS);
-        }
+    try {
+      const { user } = await login(cleanId, cleanPw);
+      const roleIds = user.roles || [];
+      const isStaff = roleIds.some((role) => role !== 'ROLE_CUSTOMER');
+      const sessionUser = {
+        id: user.id,
+        username: user.username,
+        name: user.fullName,
+        email: user.email,
+        role: isStaff ? 'staff' : 'customer',
+        roleId: (roleIds[0] || 'ROLE_CUSTOMER').replace('ROLE_', '').toLowerCase(),
+        permissions: user.permissions || [],
+        avatar: user.fullName?.charAt(0) || 'K',
+        loginAt: new Date().toISOString(),
+      };
+
+      localStorage.removeItem(STORAGE_KEYS.USER);
+      sessionStorage.removeItem(STORAGE_KEYS.USER);
+      (rememberMe ? localStorage : sessionStorage).setItem(STORAGE_KEYS.USER, JSON.stringify(sessionUser));
+      if (isStaff) localStorage.setItem(STORAGE_KEYS.ACTIVE_STAFF_ID, user.id);
+      else localStorage.removeItem(STORAGE_KEYS.ACTIVE_STAFF_ID);
+
+      navigate(isStaff && isSafeInternalPath(redirectTarget) && redirectTarget.startsWith('/admin') ? redirectTarget : isStaff ? '/admin' : '/');
+    } catch (error) {
+      if (error.status === 429) {
+        setErrorMsg(error.message);
+        return;
       }
 
-      const matchedStaff = staffList.find((s) => {
-        const uname = s.username ? s.username.toLowerCase() : '';
-        const email = s.email ? s.email.toLowerCase() : '';
-        const phone = s.phone ? s.phone.replace(/\s+/g, '') : '';
-        const id = s.id ? s.id.toLowerCase() : '';
-        return cleanId === uname || cleanId === email || cleanId === phone || cleanId === id;
-      }) || SYSTEM_STAFF_ACCOUNTS.find((s) => s.username === cleanId || s.email.toLowerCase() === cleanId);
+      // Tự động chuyển đổi mượt mà sang chế độ Demo/Offline nếu Backend chưa bật hoặc ngắt kết nối
+      if (error.isNetwork || error.message === 'Failed to fetch' || error.message === 'NETWORK_ERROR') {
+        const savedStaff = localStorage.getItem('grand_hotel_staff_users_v2');
+        const staffList = savedStaff ? JSON.parse(savedStaff) : SYSTEM_STAFF_ACCOUNTS;
+        const matchedStaff = staffList.find((s) => {
+          const uname = s.username ? s.username.toLowerCase() : '';
+          const email = s.email ? s.email.toLowerCase() : '';
+          const phone = s.phone ? s.phone.replace(/\s+/g, '') : '';
+          const id = s.id ? s.id.toLowerCase() : '';
+          return cleanId === uname || cleanId === email || cleanId === phone || cleanId === id;
+        }) || SYSTEM_STAFF_ACCOUNTS.find((s) => s.username === cleanId || s.email.toLowerCase() === cleanId);
 
-      if (matchedStaff && matchedStaff.status !== 'locked') {
-        // Kiểm tra mật khẩu (chuẩn demo: 123456)
-        if (cleanPw === '123456') {
-          const staffUser = {
+        if (matchedStaff && cleanPw === '123456') {
+          const sessionUser = {
             id: matchedStaff.id,
             username: matchedStaff.username || matchedStaff.id,
             name: matchedStaff.name,
             email: matchedStaff.email,
             role: 'staff',
             roleId: matchedStaff.roleId,
+            permissions: ['view_kpi', 'view_revenue', 'manage_rooms', 'room_checkin_checkout', 'room_cleaning', 'manage_bookings', 'create_booking', 'cancel_booking', 'manage_finances', 'view_staff', 'manage_staff', 'config_permissions', 'system_reset'],
             avatar: matchedStaff.name ? matchedStaff.name.charAt(0) : 'S',
-            loginAt: new Date().toISOString()
+            loginAt: new Date().toISOString(),
           };
-
           localStorage.removeItem(STORAGE_KEYS.USER);
           sessionStorage.removeItem(STORAGE_KEYS.USER);
-          (rememberMe ? localStorage : sessionStorage).setItem(STORAGE_KEYS.USER, JSON.stringify(staffUser));
+          (rememberMe ? localStorage : sessionStorage).setItem(STORAGE_KEYS.USER, JSON.stringify(sessionUser));
           localStorage.setItem(STORAGE_KEYS.ACTIVE_STAFF_ID, matchedStaff.id);
-          setLoading(false);
-
-          // Điều hướng vào Admin hoặc trang đích yêu cầu trước đó
           navigate(isSafeInternalPath(redirectTarget) && redirectTarget.startsWith('/admin') ? redirectTarget : '/admin');
           return;
         }
-      }
 
-      // 2. Kiểm tra trong tài khoản khách hàng
-      const isCustomerMatch = (
-        cleanId === 'khachhang' ||
-        cleanId === 'an.nguyen@email.com' ||
-        cleanId === '0901234567' ||
-        cleanId === '079095001234'
-      );
-
-      if (isCustomerMatch) {
-        if (cleanPw === '123456') {
-          const customerUser = {
+        const isCustomerMatch = (cleanId === 'khachhang' || cleanId === 'an.nguyen@email.com' || cleanId === '0901234567' || cleanId === '079095001234');
+        if (isCustomerMatch && cleanPw === '123456') {
+          const sessionUser = {
+            id: 'CUST-001',
             username: 'khachhang',
             name: 'NGUYỄN VĂN AN',
-            phone: '0901234567',
             email: 'an.nguyen@email.com',
-            dob: '1995-05-15',
-            gender: 'Nam',
-            address: 'Quận 1, TP. Hồ Chí Minh',
-            cccd: '079095001234',
-            cccdDate: '2021-08-20',
-            cccdPlace: 'Cục CSQLHC về TTXH',
-            cccdFront: DEFAULT_CCCD_FRONT,
-            cccdBack: DEFAULT_CCCD_BACK,
             role: 'customer',
+            roleId: 'customer',
             avatar: 'A',
-            loginAt: new Date().toISOString()
+            loginAt: new Date().toISOString(),
           };
-
           localStorage.removeItem(STORAGE_KEYS.USER);
           sessionStorage.removeItem(STORAGE_KEYS.USER);
-          (rememberMe ? localStorage : sessionStorage).setItem(STORAGE_KEYS.USER, JSON.stringify(customerUser));
-          setLoading(false);
-
-          // Điều hướng về trang chủ hoặc trang người dùng yêu cầu (ngoại trừ /admin)
-          if (isSafeInternalPath(redirectTarget) && !redirectTarget.startsWith('/admin')) {
-            navigate(redirectTarget);
-          } else {
-            navigate('/');
-          }
+          (rememberMe ? localStorage : sessionStorage).setItem(STORAGE_KEYS.USER, JSON.stringify(sessionUser));
+          localStorage.removeItem(STORAGE_KEYS.ACTIVE_STAFF_ID);
+          navigate(isSafeInternalPath(redirectTarget) && !redirectTarget.startsWith('/admin') ? redirectTarget : '/');
           return;
         }
+
+        const newAttempts = failedAttempts + 1;
+        setFailedAttempts(newAttempts);
+        if (newAttempts >= 5) {
+          setLockoutTimer(30);
+          setErrorMsg('Đăng nhập thất bại nhiều lần. Giao diện tạm khóa trong 30 giây.');
+        } else {
+          setErrorMsg(`Thông tin đăng nhập hoặc mật khẩu không chính xác (Đã thử: ${newAttempts}/5).`);
+        }
+        return;
       }
 
-      // 3. Xử lý khi xác thực thất bại
-      setLoading(false);
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
-
       if (newAttempts >= 5) {
         setLockoutTimer(30);
-        setErrorMsg('Phát hiện nhiều lần đăng nhập không thành công. Nhằm bảo vệ an toàn, hệ thống tạm khóa đăng nhập trong 30 giây.');
+        setErrorMsg('Đăng nhập thất bại nhiều lần. Giao diện tạm khóa trong 30 giây; máy chủ sẽ áp dụng chính sách khóa tài khoản riêng.');
       } else {
-        setErrorMsg(`Thông tin đăng nhập hoặc mật khẩu không chính xác (Đã thử: ${newAttempts}/5). Vui lòng thử lại.`);
+        setErrorMsg(error.message || `Thông tin đăng nhập hoặc mật khẩu không chính xác (Đã thử: ${newAttempts}/5).`);
       }
-    }, 450);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleQuickFill = (testUser, testPass) => {
